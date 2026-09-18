@@ -375,6 +375,12 @@ function tryFirewall(port) {
     return { ok: true, method: "current-user" };
   } catch (err) {
     const inner = `-NoProfile -ExecutionPolicy Bypass -File "${script}" -Port ${Number(port)}`;
+    fs.writeSync(
+      1,
+      "Windows will show a UAC prompt now. Click Yes to allow inbound TCP " +
+        port +
+        " from Tailscale and your LAN. Click No and remote OMP cannot connect.\n",
+    );
     try {
       execFileSync(
         "powershell.exe",

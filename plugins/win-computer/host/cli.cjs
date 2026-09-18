@@ -151,13 +151,14 @@ async function hostInstall(args) {
   }
 
   process.stdout.write(
-    `Firewall inbound TCP ${port} from Tailscale CGNAT + private LAN\n  why: remote OMP cannot reach 0.0.0.0:${port} until Windows Firewall allows it\n`,
+    `Firewall inbound TCP ${port} from Tailscale CGNAT + private LAN\n  why: remote OMP cannot reach this host until Windows Firewall allows that port\n`,
   );
-  process.stdout.write("  trying without admin; if that fails Windows will ask for Administrator\n");
   const fw = lib.tryFirewall(port);
   if (fw.ok) process.stdout.write(`  ok (${fw.method})\n`);
   else {
-    process.stdout.write(`  not set. Approve UAC, or run: host firewall\n  ${fw.hint || fw.error || ""}\n`);
+    process.stdout.write(
+      `  not set. Remote clients will fail until you rerun: node bin/win-computer.cjs host firewall\n`,
+    );
   }
 
   process.stdout.write(`Bind ${host}:${port} and start watchdog\n  why: watchdog restarts node if it crashes, without waiting for next logon\n`);

@@ -1,0 +1,22 @@
+{
+  "name": "whenmoon-afk",
+  "owner": { "name": "WhenMoon-afk" },
+  "metadata": {
+    "description": "WhenMoon-afk Oh My Pi plugins",
+    "version": "0.0.1"
+  },
+  "plugins": [
+    {
+      "name": "win-computer",
+      "version": "0.0.1",
+      "description": "HTTP MCP server + skill to drive a Windows desktop from any OMP session",
+      "category": "productivity",
+      "license": "MIT",
+      "author": { "name": "WhenMoon-afk" },
+      "homepage": "https://github.com/WhenMoon-afk/win-computer",
+      "repository": "https://github.com/WhenMoon-afk/win-computer",
+      "source": "./plugins/win-computer",
+      "tags": ["mcp", "computer-use", "windows"]
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@whenmoon-afk/win-computer",
+  "version": "0.0.1",
+  "description": "Remote Windows desktop computer-use over HTTP MCP for Oh My Pi",
+  "license": "MIT",
+  "author": "WhenMoon-afk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WhenMoon-afk/win-computer.git"
+  },
+  "homepage": "https://github.com/WhenMoon-afk/win-computer",
+  "bugs": {
+    "url": "https://github.com/WhenMoon-afk/win-computer/issues"
+  },
+  "bin": {
+    "omp-win-computer": "./bin/win-computer.cjs"
+  },
+  "omp": {
+    "extensions": ["./extension.js"]
+  },
+  "files": [
+    "bin",
+    "host",
+    "skills",
+    "extension.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": ["omp", "oh-my-pi", "mcp", "computer-use", "windows"],
+  "engines": { "node": ">=18" }
+}

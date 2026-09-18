@@ -1,0 +1,7 @@
+{
+  "name": "win-computer",
+  "version": "0.0.1",
+  "description": "Remote Windows desktop computer-use over MCP",
+  "author": { "name": "WhenMoon-afk" },
+  "homepage": "https://github.com/WhenMoon-afk/win-computer"
+}

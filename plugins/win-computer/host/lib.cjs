@@ -7,7 +7,44 @@ const crypto = require("crypto");
 const http = require("http");
 const { execFileSync, spawnSync } = require("child_process");
 
-const VERSION = "0.0.1";
+const VERSION = "0.0.2";
+function joinStatePath() {
+  return path.join(stateDir(), "join.json");
+}
+
+function newJoinTicket() {
+  const id = crypto.randomBytes(24).toString("base64url");
+  const ticket = { id, exp: Date.now() + 30 * 60 * 1000 };
+  ensureDir(stateDir());
+  fs.writeFileSync(joinStatePath(), JSON.stringify(ticket) + "\n");
+  return ticket;
+}
+
+function readJoinTicket() {
+  try {
+    return JSON.parse(fs.readFileSync(joinStatePath(), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function consumeJoinTicket(id) {
+  const t = readJoinTicket();
+  if (!t || t.id !== id) return null;
+  if (Date.now() > t.exp) return null;
+  try {
+    fs.unlinkSync(joinStatePath());
+  } catch {
+    /* ignore */
+  }
+  return t;
+}
+
+function joinUrl(advertiseUrl, id) {
+  const u = new URL(advertiseUrl);
+  return `${u.origin}/join/${id}`;
+}
+
 const TASK_NAME = "OMP Win Computer MCP";
 const DEFAULT_PORT = 7420;
 const DEFAULT_HOST = "0.0.0.0";
@@ -434,4 +471,9 @@ module.exports = {
   taskXml,
   currentUserId,
   tryFirewall,
+  joinStatePath,
+  newJoinTicket,
+  readJoinTicket,
+  consumeJoinTicket,
+  joinUrl,
 };

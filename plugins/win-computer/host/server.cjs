@@ -621,6 +621,7 @@ const server = http.createServer(async (req, res) => {
         version: lib.VERSION,
         host: HOST,
         port: PORT,
+        hostname: require("os").hostname(),
         backend: session.capabilities?.backend,
         capture: session.capabilities?.capture,
         input: session.capabilities?.input,
@@ -628,6 +629,27 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     }
+
+    if (req.method === "GET" && url.pathname.startsWith("/join/")) {
+      const id = url.pathname.slice("/join/".length);
+      const ticket = lib.consumeJoinTicket(id);
+      if (!ticket) {
+        sendJson(res, 404, { error: "join link expired or invalid" });
+        return;
+      }
+      const origin = `http://${req.headers.host || "127.0.0.1:" + PORT}`;
+      sendJson(res, 200, {
+        ok: true,
+        mcp: {
+          type: "http",
+          url: `${origin}/mcp`,
+          headers: { Authorization: `Bearer ${TOKEN}` },
+          timeout: 120000,
+        },
+      });
+      return;
+    }
+
 
     if (url.pathname !== "/mcp") {
       sendJson(res, 404, { error: "not found" });

@@ -1,6 +1,6 @@
 {
   "name": "@whenmoon-afk/win-computer",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Remote Windows desktop computer-use over HTTP MCP for Oh My Pi",
   "license": "MIT",
   "author": "WhenMoon-afk",

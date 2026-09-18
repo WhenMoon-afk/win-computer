@@ -9,25 +9,15 @@ Remote GUI of a Windows host over HTTP MCP from this OMP session.
 
 Local eval `computer.*` only exists in an OMP process on that Windows box. This skill is the MCP path from another machine.
 
-## Connect once
+## Connect
 
-On the Windows host:
+On Windows, in OMP: `/win-computer host`. It sets up prereqs, firewall (UAC), and prints a join URL.
 
-```
-node bin/win-computer.cjs host install
-```
+On this machine: `/win-computer join <that-url>`. Then `/mcp reload`. `/mcp list` should show `win-computer` connected.
 
-That explains each step. It does not print the token. On Windows, `node bin/win-computer.cjs host snippet` prints the client JSON. That output is a desktop-control secret.
+The join URL is a one-time ticket (30 minutes). It writes the bearer for you. Do not type a pairing code. Do not paste mcp.json by hand unless the URL expired (`/win-computer connect <mcp-url> <token>` is recovery only).
 
-On this machine, merge into `~/.omp/agent/mcp.json`, or:
-
-```
-/win-computer connect http://HOST:7420/mcp TOKEN
-```
-
-Then `/mcp reload`. `/mcp list` should show `win-computer` connected. `/mcp test win-computer` if tools are missing.
-
-The bearer is full desktop control. If connect fails, Windows inbound TCP 7420 from Tailscale `100.64.0.0/10` and your LAN.
+The bearer is full desktop control. If join fails, Windows inbound TCP 7420 from Tailscale `100.64.0.0/10` and your LAN.
 
 The Windows user must be logged on. Capture cannot run as SYSTEM.
 
@@ -83,7 +73,7 @@ AX bounds / `element_at` are global desktop. Never pass those into `click`.
 | `WindowNotFound` | `windows` again |
 | `StaleRef` | re-snapshot AX |
 | `401` | missing/wrong bearer |
-| timeout | screenshot/AX too slow; client timeout is 120s |
+| join 404 | URL expired or already used. Run `/win-computer host` again |
 | tools missing | `/mcp reload` then `/mcp test win-computer` |
 
 ## Safety

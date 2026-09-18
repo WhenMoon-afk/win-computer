@@ -8,25 +8,83 @@ const lib = require("./lib.cjs");
 function usage() {
   process.stdout.write(`omp-win-computer ${lib.VERSION}
 
-Remote Windows desktop computer-use over HTTP MCP.
+Remote Windows desktop over HTTP MCP.
 
-Host (Windows, the machine whose screen you want to control):
-  host install     Token, logon task, firewall, watchdog
+Windows host:
+  host install     Prereqs, token, logon task, firewall, watchdog, join URL
   host uninstall   Stop server, remove logon task (keeps token)
-  host start       Start watchdog now
-  host stop        Stop watchdog and listener
-  host status      Health, pid, advertise URLs
-  host snippet     Print client mcp.json (includes the token)
-  host firewall    Open inbound TCP 7420 (UAC once if needed)
+  host start | stop | status | firewall
+  host snippet     Recovery: print mcp.json (includes the token)
 
-Client (any OMP machine):
-  client connect <url> [token]   Merge win-computer into ~/.omp/agent/mcp.json
-  client disconnect              Remove that server entry
+Other OMP:
+  client join <join-url>     Write mcp.json from the host join URL
+  client disconnect
 
-  serve            Run the MCP server in the foreground (Windows)
-
-Docs: plugin README. Tools on the client are mcp__win_computer_*.
+  serve            Foreground MCP server (Windows)
 `);
+}
+
+function say(what, why) {
+  process.stdout.write(`${what}\n  why: ${why}\n`);
+}
+
+function wingetInstall(id) {
+  execFileSync(
+    "winget",
+    ["install", "--id", id, "-e", "--accept-package-agreements", "--accept-source-agreements"],
+    { stdio: "inherit", windowsHide: false },
+  );
+}
+
+function ensurePrereqs() {
+  try {
+    lib.nodePath();
+    say("Node.js found", "the MCP server is a Node process");
+  } catch {
+    say(
+      "Installing Node.js LTS via winget (OpenJS.NodeJS.LTS)",
+      "Microsoft catalog, signed. Needed because this server runs on Node.",
+    );
+    wingetInstall("OpenJS.NodeJS.LTS");
+  }
+
+  try {
+    const natives = lib.findNatives();
+    say(`OMP native ${natives}`, "capture/input/AX come from Oh My Pi, not this plugin");
+  } catch (err) {
+    die(
+      "Oh My Pi natives not found. Install OMP on this Windows machine, then rerun host install. " +
+        String(err.message || err),
+    );
+  }
+
+  try {
+    execFileSync("tailscale", ["status", "--json"], {
+      encoding: "utf8",
+      timeout: 8000,
+      windowsHide: true,
+    });
+    say("Tailscale is up", "the other computer reaches this host on your tailnet without pasted IPs");
+  } catch {
+    say(
+      "Installing Tailscale via winget (Tailscale.Tailscale)",
+      "Microsoft catalog, signed. Join uses your tailnet, not a public IP.",
+    );
+    try {
+      wingetInstall("Tailscale.Tailscale");
+    } catch (err) {
+      process.stdout.write(`  winget: ${err.message || err}\n`);
+    }
+    say(
+      "If Tailscale asks you to log in, a browser window is expected",
+      "that login is how only your devices see this desktop",
+    );
+    try {
+      execFileSync("tailscale", ["up"], { stdio: "inherit", timeout: 180000 });
+    } catch {
+      process.stdout.write("  tailscale up did not finish. Log in, then rerun host install.\n");
+    }
+  }
 }
 
 function die(msg, code = 1) {
@@ -115,20 +173,20 @@ async function hostInstall(args) {
   const host = flag(args, "--host") || lib.DEFAULT_HOST;
   process.stdout.write(`win-computer host install ${lib.VERSION}\n\n`);
 
-  process.stdout.write(`State dir ${lib.stateDir()}\n  why: token/config/logs stay here across plugin upgrades and reboots\n`);
+  ensurePrereqs();
+
+  say(`State dir ${lib.stateDir()}`, "token/config/logs stay here across plugin upgrades and reboots");
   lib.ensureDir(lib.stateDir());
   lib.ensureDir(lib.logDir());
 
   const existed = fs.existsSync(lib.tokenPath()) && fs.readFileSync(lib.tokenPath(), "utf8").trim();
   const tokenFile = lib.migrateAndEnsureToken();
-  process.stdout.write(
-    existed
-      ? `Token reused at ${tokenFile}\n  why: keep existing clients working; not printed (desktop-control secret)\n`
-      : `Token created at ${tokenFile}\n  why: remote OMP authenticates with this bearer; not printed (desktop-control secret)\n`,
+  say(
+    existed ? `Token reused at ${tokenFile}` : `Token created at ${tokenFile}`,
+    "not printed. the join URL is how the other machine gets it",
   );
 
   const natives = lib.findNatives();
-  process.stdout.write(`Native ${natives}\n  why: capture/input/AX come from Oh My Pi's DesktopSession, not this plugin\n`);
   lib.saveConfig({
     version: lib.VERSION,
     host,
@@ -137,8 +195,9 @@ async function hostInstall(args) {
     installedAt: new Date().toISOString(),
   });
 
-  process.stdout.write(
-    `Logon task "${lib.TASK_NAME}" (interactive, 20s delay, restart on fail)\n  why: the server must run in your logged-on session; SYSTEM cannot capture the desktop\n`,
+  say(
+    `Logon task "${lib.TASK_NAME}" (interactive, 20s delay, restart on fail)`,
+    "the server must run in your logged-on session; SYSTEM cannot capture the desktop",
   );
   let task = { ok: false };
   try {
@@ -150,31 +209,29 @@ async function hostInstall(args) {
     process.stdout.write(`  failed: ${task.error}\n`);
   }
 
-  process.stdout.write(
-    `Firewall inbound TCP ${port} from Tailscale CGNAT + private LAN\n  why: remote OMP cannot reach this host until Windows Firewall allows that port\n`,
+  say(
+    `Firewall inbound TCP ${port} from Tailscale CGNAT + private LAN`,
+    "remote OMP cannot reach this host until Windows Firewall allows that port",
   );
   const fw = lib.tryFirewall(port);
   if (fw.ok) process.stdout.write(`  ok (${fw.method})\n`);
-  else {
-    process.stdout.write(
-      `  not set. Remote clients will fail until you rerun: node bin/win-computer.cjs host firewall\n`,
-    );
-  }
+  else process.stdout.write("  not set. Remote clients fail until you rerun: host firewall\n");
 
-  process.stdout.write(`Bind ${host}:${port} and start watchdog\n  why: watchdog restarts node if it crashes, without waiting for next logon\n`);
+  say(`Bind ${host}:${port} and start watchdog`, "watchdog restarts node if it crashes, without waiting for next logon");
   await hostStop();
   startWatchdogDetached();
   const h = await waitHealth(10000);
   if (h.ok) process.stdout.write(`  health ok  capture=${h.body?.capture} input=${h.body?.input} ax=${h.body?.ax}\n`);
   else process.stdout.write(`  health failed ${JSON.stringify(h)}\n`);
 
+  const ticket = lib.newJoinTicket();
   const urls = lib.detectAdvertiseUrls(port);
-  process.stdout.write(`\nReachable as:\n${urls.map((u) => "  " + u).join("\n") || "  (no Tailscale/LAN IP found)"}\n`);
+  const base = urls.find((u) => u.includes(".ts.net")) || urls[0] || `http://127.0.0.1:${port}/mcp`;
+  const join = lib.joinUrl(base, ticket.id);
   process.stdout.write(
-    `\nNext, on the OMP client (token is not printed here):\n  omp plugin install win-computer@whenmoon-afk\n  omp-win-computer host snippet     # on this Windows box; prints the secret\n  /win-computer connect <url> <token>\n  /mcp reload\n  then call mcp__win_computer_capabilities — not local computer.*\n`,
+    `\nOn the other OMP session, run this as-is (valid 30 minutes):\n  /win-computer join ${join}\n`,
   );
   if (!h.ok) process.exit(2);
-  if (!task.ok || !fw.ok) process.exit(0);
 }
 
 async function hostUninstall() {
@@ -273,6 +330,26 @@ async function clientConnect(args) {
   process.stdout.write(`wrote ${p}\nreload MCP in OMP: /mcp reload\n`);
 }
 
+async function clientJoin(args) {
+  const joinUrl = args[0];
+  if (!joinUrl) die("usage: client join <join-url>");
+  say(`Fetching ${joinUrl}`, "the host join URL carries a one-time ticket, not something you type");
+  const res = await fetch(joinUrl);
+  const text = await res.text();
+  if (!res.ok) die(`join failed: ${res.status} ${text}`);
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    die("join URL did not return JSON");
+  }
+  const mcp = body.mcp;
+  if (!mcp || !mcp.url || !mcp.headers || !mcp.headers.Authorization) die("join payload missing mcp url/token");
+  const token = String(mcp.headers.Authorization).replace(/^Bearer\s+/i, "");
+  const p = lib.mergeClientMcp(mcp.url, token);
+  process.stdout.write(`wrote ${p}\nIn OMP: /mcp reload\nThen call mcp__win_computer_capabilities. Not local computer.*\n`);
+}
+
 function clientDisconnect() {
   const p = lib.removeClientMcp();
   process.stdout.write(`updated ${p}\n`);
@@ -307,9 +384,10 @@ async function main() {
     die("usage: host install|uninstall|start|stop|status|snippet|firewall");
   }
   if (cmd === "client") {
+    if (sub === "join") return clientJoin(rest);
     if (sub === "connect") return clientConnect(rest);
     if (sub === "disconnect") return clientDisconnect();
-    die("usage: client connect <url> [token] | client disconnect");
+    die("usage: client join <join-url> | client connect <url> [token] | client disconnect");
   }
   die("unknown command. --help");
 }

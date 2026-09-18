@@ -11,15 +11,14 @@ Local eval `computer.*` only exists in an OMP process on that Windows box. This 
 
 ## Connect
 
-On Windows, in OMP: `/win-computer host`. It sets up prereqs, firewall (UAC), and prints a join URL.
+On Windows, in OMP: `/win-computer host`. It sets up prereqs, binds localhost, uses Tailscale Serve (no UAC), and prints a join URL.
 
 On this machine: `/win-computer join <that-url>`. Then `/mcp reload`. `/mcp list` should show `win-computer` connected.
 
-The join URL is a one-time ticket (30 minutes). It writes the bearer for you. Do not type a pairing code. Do not paste mcp.json by hand unless the URL expired (`/win-computer connect <mcp-url> <token>` is recovery only).
+The join URL is a one-time ticket (2 minutes). Only localhost (Serve) plus your Tailscale user can redeem it. Do not type a pairing code.
 
-The bearer is full desktop control. If join fails, Windows inbound TCP 7420 from Tailscale `100.64.0.0/10` and your LAN.
+The Windows user must be logged on for capture. That is the desktop session, not an Administrator prompt.
 
-The Windows user must be logged on. Capture cannot run as SYSTEM.
 
 ## Tool names
 

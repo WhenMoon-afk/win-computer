@@ -631,6 +631,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && url.pathname.startsWith("/join/")) {
+      const ip = lib.joinClientIp(req);
+      const gate = lib.assertSameTailscaleUser(ip);
+      if (!gate.ok) {
+        sendJson(res, 403, { error: gate.error });
+        return;
+      }
       const id = url.pathname.slice("/join/".length);
       const ticket = lib.consumeJoinTicket(id);
       if (!ticket) {
@@ -649,6 +655,7 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     }
+
 
 
     if (url.pathname !== "/mcp") {

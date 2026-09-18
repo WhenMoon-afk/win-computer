@@ -7,18 +7,127 @@ const crypto = require("crypto");
 const http = require("http");
 const { execFileSync, spawnSync } = require("child_process");
 
-const VERSION = "0.0.2";
+const VERSION = "0.0.3";
 function joinStatePath() {
   return path.join(stateDir(), "join.json");
 }
 
 function newJoinTicket() {
   const id = crypto.randomBytes(24).toString("base64url");
-  const ticket = { id, exp: Date.now() + 30 * 60 * 1000 };
+  const ticket = { id, exp: Date.now() + 2 * 60 * 1000 };
   ensureDir(stateDir());
   fs.writeFileSync(joinStatePath(), JSON.stringify(ticket) + "\n");
   return ticket;
 }
+
+function isTailscaleAddr(ip) {
+  const v4 = ip.match(/^100\.(\d+)\.(\d+)\.(\d+)$/);
+  if (v4) {
+    const n = Number(v4[1]);
+    return n >= 64 && n <= 127;
+  }
+  return String(ip).toLowerCase().startsWith("fd7a:115c:a1e0:");
+}
+
+function socketIp(req) {
+  let ip = req.socket && req.socket.remoteAddress ? String(req.socket.remoteAddress) : "";
+  if (ip.startsWith("::ffff:")) ip = ip.slice(7);
+  return ip;
+}
+
+function joinClientIp(req) {
+  const ip = socketIp(req);
+  if (ip === "127.0.0.1" || ip === "::1") {
+    const xff = req.headers["x-forwarded-for"];
+    if (typeof xff === "string" && xff.trim()) {
+      let first = xff.split(",")[0].trim();
+      if (first.startsWith("::ffff:")) first = first.slice(7);
+      return first;
+    }
+  }
+  return ip;
+}
+
+function tailscaleWhois(ip) {
+  const raw = execFileSync("tailscale", ["whois", "--json", ip], {
+    encoding: "utf8",
+    timeout: 5000,
+    windowsHide: true,
+  });
+  return JSON.parse(raw);
+}
+
+function whoisUserId(w) {
+  const id = w && w.UserProfile && w.UserProfile.ID;
+  return id == null ? "" : String(id);
+}
+
+function assertSameTailscaleUser(ip) {
+  if (ip === "127.0.0.1" || ip === "::1") {
+    return { ok: true, node: "localhost" };
+  }
+  if (!isTailscaleAddr(ip)) {
+    return { ok: false, error: "join only from Tailscale Serve or a Tailscale address" };
+  }
+  let selfW;
+  let them;
+  try {
+    const status = JSON.parse(
+      execFileSync("tailscale", ["status", "--json"], {
+        encoding: "utf8",
+        timeout: 5000,
+        windowsHide: true,
+      }),
+    );
+    const selfIp = (status.Self && status.Self.TailscaleIPs && status.Self.TailscaleIPs[0]) || ip;
+    selfW = tailscaleWhois(selfIp);
+    them = tailscaleWhois(ip);
+  } catch {
+    return { ok: false, error: "tailscale whois failed" };
+  }
+  const a = whoisUserId(selfW);
+  const b = whoisUserId(them);
+  if (!a || !b || a !== b) {
+    return { ok: false, error: "join only from your Tailscale user" };
+  }
+  return { ok: true, node: them.Node && them.Node.ComputedName };
+}
+
+function enableTailscaleServe(port) {
+  execFileSync("tailscale", ["serve", "--bg", String(port)], {
+    encoding: "utf8",
+    timeout: 30000,
+    windowsHide: true,
+  });
+}
+
+function disableTailscaleServe() {
+  try {
+    execFileSync("tailscale", ["serve", "reset"], {
+      encoding: "utf8",
+      timeout: 15000,
+      windowsHide: true,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function tailscaleHttpsOrigin() {
+  const status = JSON.parse(
+    execFileSync("tailscale", ["status", "--json"], {
+      encoding: "utf8",
+      timeout: 5000,
+      windowsHide: true,
+    }),
+  );
+  const dns = String((status.Self && status.Self.DNSName) || "").replace(/\.$/, "");
+  if (!dns) return null;
+  return `https://${dns}`;
+}
+
+
 
 function readJoinTicket() {
   try {
@@ -47,7 +156,7 @@ function joinUrl(advertiseUrl, id) {
 
 const TASK_NAME = "OMP Win Computer MCP";
 const DEFAULT_PORT = 7420;
-const DEFAULT_HOST = "0.0.0.0";
+const DEFAULT_HOST = "127.0.0.1";
 
 function homedir() {
   return process.env.USERPROFILE || os.homedir();
@@ -476,4 +585,11 @@ module.exports = {
   readJoinTicket,
   consumeJoinTicket,
   joinUrl,
+  socketIp,
+  joinClientIp,
+  assertSameTailscaleUser,
+  isTailscaleAddr,
+  enableTailscaleServe,
+  disableTailscaleServe,
+  tailscaleHttpsOrigin,
 };

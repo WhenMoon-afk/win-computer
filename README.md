@@ -2,16 +2,15 @@
 
 Remote Windows desktop for [Oh My Pi](https://github.com/can1357/oh-my-pi) over HTTP MCP.
 
-The Windows host runs a Node server that wraps OMP's `DesktopSession` native.
-Any other OMP session calls `mcp__win_computer_*`.
+The Windows host runs a Node server on `127.0.0.1`. Tailscale Serve publishes it to your tailnet as HTTPS. Nothing opens on Windows Firewall, so there is no UAC prompt.
 
-Package: `@whenmoon-afk/win-computer` `0.0.2`
+Package: `@whenmoon-afk/win-computer` `0.0.3`
 
 This repo has no tokens, IPs, or mcp.json. Token and config live on the host in `~/.omp/win-computer/`.
 
 ## Setup
 
-In OMP on **both** machines:
+In OMP on both machines:
 
 ```
 /marketplace add WhenMoon-afk/win-computer
@@ -19,31 +18,27 @@ In OMP on **both** machines:
 
 Install `win-computer` from that marketplace.
 
-On the **Windows** machine, in OMP:
+On Windows, in OMP (or over SSH into that session):
 
 ```
 /win-computer host
 ```
 
-That command checks Node, OMP natives, and Tailscale (installs Node/Tailscale via winget if needed), writes a logon task, asks Windows for a firewall rule (UAC), starts the watchdog, and prints a join URL. Each step says what it is doing and why.
+That checks Node, OMP natives, and Tailscale (installs Node/Tailscale via winget if needed), writes a logon task, binds localhost, runs `tailscale serve --bg 7420`, and prints a join URL. Each step says what it is doing and why. If Serve fails, install stops. It does not fall back to a firewall rule.
 
-On the **other** OMP session, paste that URL as:
+On the other OMP session:
 
 ```
-/win-computer join http://HOST:7420/join/...
+/win-computer join https://HOST.ts.net/join/...
 ```
 
-The join URL is a 30-minute, one-time ticket. It writes `~/.omp/agent/mcp.json`. Then `/mcp reload`. Call `mcp__win_computer_capabilities`. Not local `computer.*`.
+The join URL is a 2-minute, one-time ticket. The Node server only accepts connections from localhost (Tailscale Serve). If Serve forwards `X-Forwarded-For`, join also requires that IP to `tailscale whois` as the same Tailscale user. Then `/mcp reload`. Call `mcp__win_computer_capabilities`. Not local `computer.*`.
+
+The Windows user still has to be logged on for desktop capture. That is not UAC. It is the interactive session.
 
 ## Recovery
 
-If the join URL expired:
-
-```
-node bin/win-computer.cjs host install
-```
-
-prints a new one. `host snippet` prints the raw token. Do not commit it.
+If the join URL expired, run `/win-computer host` again. `host snippet` prints the raw token. Do not commit it.
 
 ## Restart
 
@@ -59,4 +54,4 @@ prints a new one. `host snippet` prints the raw token. Do not commit it.
 node bin/win-computer.cjs host uninstall
 ```
 
-Keeps the token file until you delete `~/.omp/win-computer/`.
+Stops the watchdog, removes the logon task, and runs `tailscale serve reset` on this node. Keeps the token file until you delete `~/.omp/win-computer/`.

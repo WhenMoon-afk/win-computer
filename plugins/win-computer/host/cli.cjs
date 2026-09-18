@@ -170,7 +170,7 @@ function writeTask() {
 async function hostInstall(args) {
   if (process.platform !== "win32") die("host install is Windows-only");
   const port = Number(flag(args, "--port") || lib.DEFAULT_PORT);
-  const host = flag(args, "--host") || lib.DEFAULT_HOST;
+  const host = flag(args, "--host") || "127.0.0.1";
   process.stdout.write(`win-computer host install ${lib.VERSION}\n\n`);
 
   ensurePrereqs();
@@ -208,16 +208,22 @@ async function hostInstall(args) {
     task = { ok: false, error: String(err.stderr || err.message || err).trim() };
     process.stdout.write(`  failed: ${task.error}\n`);
   }
-
   say(
-    `Firewall inbound TCP ${port} from Tailscale CGNAT + private LAN`,
-    "remote OMP cannot reach this host until Windows Firewall allows that port",
+    `Listen on 127.0.0.1:${port} and Tailscale Serve`,
+    "no Windows Firewall rule, no UAC. only your tailnet can reach this. you do not have to sit at the PC.",
   );
-  const fw = lib.tryFirewall(port);
-  if (fw.ok) process.stdout.write(`  ok (${fw.method})\n`);
-  else process.stdout.write("  not set. Remote clients fail until you rerun: host firewall\n");
+  try {
+    lib.enableTailscaleServe(port);
+    process.stdout.write("  tailscale serve --bg ok\n");
+  } catch (err) {
+    die(
+      "tailscale serve failed: " +
+        String(err.stderr || err.message || err).trim() +
+        "\nLog into Tailscale on this Windows machine (`tailscale up`), then rerun host install. We do not open a firewall port.",
+    );
+  }
 
-  say(`Bind ${host}:${port} and start watchdog`, "watchdog restarts node if it crashes, without waiting for next logon");
+  say(`Start watchdog on ${host}:${port}`, "watchdog restarts node if it crashes, without waiting for next logon");
   await hostStop();
   startWatchdogDetached();
   const h = await waitHealth(10000);
@@ -225,11 +231,20 @@ async function hostInstall(args) {
   else process.stdout.write(`  health failed ${JSON.stringify(h)}\n`);
 
   const ticket = lib.newJoinTicket();
-  const urls = lib.detectAdvertiseUrls(port);
-  const base = urls.find((u) => u.includes(".ts.net")) || urls[0] || `http://127.0.0.1:${port}/mcp`;
+  let base;
+  try {
+    const origin = lib.tailscaleHttpsOrigin();
+    base = origin ? `${origin}/mcp` : null;
+  } catch {
+    base = null;
+  }
+  if (!base) {
+    const urls = lib.detectAdvertiseUrls(port);
+    base = urls.find((u) => u.includes(".ts.net")) || urls[0] || `http://127.0.0.1:${port}/mcp`;
+  }
   const join = lib.joinUrl(base, ticket.id);
   process.stdout.write(
-    `\nOn the other OMP session, run this as-is (valid 30 minutes):\n  /win-computer join ${join}\n`,
+    `\nOn the other OMP session, run this as-is (valid 2 minutes, your Tailscale user only):\n  /win-computer join ${join}\n`,
   );
   if (!h.ok) process.exit(2);
 }
@@ -244,6 +259,9 @@ async function hostUninstall() {
     });
   } catch {
     /* missing */
+  }
+  if (lib.disableTailscaleServe()) {
+    process.stdout.write("cleared Tailscale Serve on this node\n");
   }
   process.stdout.write(`stopped. token kept at ${lib.tokenPath()}\n`);
 }

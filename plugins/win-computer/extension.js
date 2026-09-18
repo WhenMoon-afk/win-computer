@@ -67,7 +67,7 @@ module.exports = function winComputer(pi) {
           ctx.ui.notify("/win-computer host is Windows-only", "error");
           return;
         }
-        ctx.ui.notify("Running host install. Watch this terminal for a UAC prompt.", "info");
+        ctx.ui.notify("Running host install (localhost + Tailscale Serve, no UAC).", "info");
         try {
           const out = await runHostInstall();
           pi.sendMessage({ customType: "win-computer-host", content: out, display: true }, { triggerTurn: false });

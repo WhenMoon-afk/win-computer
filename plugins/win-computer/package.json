@@ -1,6 +1,6 @@
 {
   "name": "@whenmoon-afk/win-computer",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Remote Windows desktop computer-use over HTTP MCP for Oh My Pi",
   "license": "MIT",
   "author": "WhenMoon-afk",
@@ -15,8 +15,13 @@
   "bin": {
     "omp-win-computer": "./bin/win-computer.cjs"
   },
+  "type": "module",
   "omp": {
     "extensions": ["./extension.js"]
+  },
+  "pi": {
+    "extensions": ["./extension.js"],
+    "skills": ["./skills/win-computer/SKILL.md"]
   },
   "files": [
     "bin",

@@ -1,10 +1,12 @@
-"use strict";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { spawn } from "child_process";
+import { createRequire } from "module";
+import { fileURLToPath } from "url";
 
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const { spawn } = require("child_process");
-const lib = require("./host/lib.cjs");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 
 function mcpPath() {
   return path.join(os.homedir(), ".omp", "agent", "mcp.json");
@@ -33,6 +35,7 @@ function runHostInstall() {
   return new Promise((resolve, reject) => {
     let node;
     try {
+      const lib = require("./host/lib.cjs");
       node = lib.nodePath();
     } catch (err) {
       reject(err);
@@ -55,7 +58,7 @@ function runHostInstall() {
   });
 }
 
-module.exports = function winComputer(pi) {
+export default function winComputer(pi) {
   pi.registerCommand("win-computer", {
     description: "Set up or join a remote Windows desktop over MCP",
     handler: async (args, ctx) => {
@@ -120,4 +123,4 @@ module.exports = function winComputer(pi) {
       );
     },
   });
-};
+}

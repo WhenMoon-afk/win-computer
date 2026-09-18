@@ -4,7 +4,7 @@ Remote Windows desktop for [Oh My Pi](https://github.com/can1357/oh-my-pi) over 
 
 The Windows host runs a Node server on `127.0.0.1`. Tailscale Serve publishes it to your tailnet as HTTPS. Nothing opens on Windows Firewall, so there is no UAC prompt.
 
-Package: `@whenmoon-afk/win-computer` `0.0.3`
+Package: `@whenmoon-afk/win-computer` `0.0.4`
 
 This repo has no tokens, IPs, or mcp.json. Token and config live on the host in `~/.omp/win-computer/`.
 

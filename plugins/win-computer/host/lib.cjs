@@ -7,7 +7,7 @@ const crypto = require("crypto");
 const http = require("http");
 const { execFileSync, spawnSync } = require("child_process");
 
-const VERSION = "0.0.3";
+const VERSION = "0.0.4";
 function joinStatePath() {
   return path.join(stateDir(), "join.json");
 }
